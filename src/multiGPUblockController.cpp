@@ -18,6 +18,7 @@
 #include <assert.h>
 #include "multiGPUblockController.h"
 #include "external/xmlParser/xmlParser.h"
+#include "zarrIO.h"
 #include "external/xmlParser/svlStrUtils.h"
 #include "standardCUDAfunctions.h"
 #include "klb_ROI.h"
@@ -95,8 +96,18 @@ multiGPUblockController::multiGPUblockController(string filenameXML)
 		assert(aux != NULL);
 		parseString<float>(string(aux), vv);
 		paramDec.Acell.push_back(vv);
-		vv.clear();				
+		vv.clear();
 
+		aux = node.getAttribute("psfNeedsAffineTransform");
+		if (aux != NULL)
+		{
+			vector<int> ll;
+			parseString<int>(string(aux), ll);
+			paramDec.psfNeedsAffineTransform.push_back(ll[0] != 0);
+		}
+		else{
+			paramDec.psfNeedsAffineTransform.push_back(false);
+		}
 	}
 
 	//read deconvolution parameters
@@ -156,6 +167,14 @@ multiGPUblockController::multiGPUblockController(string filenameXML)
 		ll.clear();
 	}
 
+	aux = node.getAttribute("saveAsZarr");
+	if (aux != NULL)
+	{
+		parseString<int>(string(aux), ll);
+		paramDec.saveAsZarr = (ll[0] != 0);
+		ll.clear();
+	}
+
 	aux = node.getAttribute("weightThreshold");
 	if (aux != NULL)
 	{
@@ -172,6 +191,18 @@ multiGPUblockController::multiGPUblockController(string filenameXML)
 
 
 	paramDec.anisotropyZ = paramDec.getAnisotropyZfromAffine();
+
+	//explicit override: getAnisotropyZfromAffine() only recognizes an identity-except-Z
+	//affine as "the reference view's calibration"; that pattern doesn't hold once views
+	//carry real composed registration transforms (e.g. converted from a BigStitcher
+	//SpimData2 XML), so allow the XML to state it directly.
+	aux = node.getAttribute("anisotropyZ");
+	if (aux != NULL)
+	{
+		parseString<float>(string(aux), vv);
+		paramDec.anisotropyZ = vv[0];
+		vv.clear();
+	}
 }
 
 //============================================================
@@ -1219,10 +1250,21 @@ void multiGPUblockController::debug_listGPUs()
 	}
 }
 //=============================================
+static bool endsWithZarr(const std::string& filename)
+{
+	return filename.size() >= 5 && filename.compare(filename.size() - 5, 5, ".zarr") == 0;
+}
+
 //===========================================================================================
 int multiGPUblockController::writeDeconvoutionResult(const std::string& filename)
 {
-	//initialize I/O object	
+	if (endsWithZarr(filename))
+	{
+		int64_t dims64[3] = { imgDims[0], imgDims[1], imgDims[2] };
+		return zarr_writeArray3D(filename, J, dims64, "float32");
+	}
+
+	//initialize I/O object
 	klb_imageIO imgIO(filename);
 
 	uint32_t xyzct[KLB_DATA_DIMS];
@@ -1279,7 +1321,34 @@ int multiGPUblockController::writeDeconvoutionResult_uint16(const std::string& f
 {
 	int error;
 
-	//initialize I/O object	
+	if (endsWithZarr(filename))
+	{
+		uint64_t N = 1;
+		for (int ii = 0; ii < MAX_DATA_DIMS; ii++)
+			N *= (uint64_t)(imgDims_[ii]);
+
+		uint16_t* Jaux = new uint16_t[N];
+		float Imin = 1e32f, Imax = -1e32f;
+		for (uint64_t ii = 0; ii < N; ii++)
+		{
+			Imin = min(imgPtr[ii], Imin);
+			Imax = max(imgPtr[ii], Imax);
+		}
+		Imax = Imax - Imin;
+		for (uint64_t ii = 0; ii < N; ii++)
+			Jaux[ii] = (uint16_t)(scale * (imgPtr[ii] - Imin) / Imax);
+
+		//NOTE: unlike the KLB path, the scale/Imin/Imax needed to recover absolute
+		//intensity from this normalized uint16 output are not currently persisted
+		//anywhere for Zarr output (KLB stores them in its header metadata; Zarr v3's
+		//array "attributes" would be the equivalent, not wired up yet).
+		int64_t dims64[3] = { imgDims_[0], imgDims_[1], imgDims_[2] };
+		error = zarr_writePyramid3D(filename, Jaux, dims64);
+		delete[] Jaux;
+		return error;
+	}
+
+	//initialize I/O object
 	klb_imageIO imgIO(filename);
 
 	uint32_t xyzct[KLB_DATA_DIMS];

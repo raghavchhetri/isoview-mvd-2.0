@@ -1,1 +1,10 @@
 build/
+build_*/
+
+# ad-hoc test outputs/configs generated while validating the Zarr v3 pipeline against
+# external datasets (D:\ paths not present in the repo); not durable fixtures
+test/dsB_zarr/
+test/dsB_zarr_test.xml
+test/tile00_deconv.xml
+test/config_2026_local.xml
+test/run_tile00.log

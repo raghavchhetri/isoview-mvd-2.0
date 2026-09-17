@@ -30,6 +30,7 @@ struct paramDeconvolution
 	std::vector<std::string> fileImg;
 	std::vector<std::string> filePSF;
 	std::vector< std::vector<float> > Acell;//to store affine transformations for each view
+	std::vector<bool> psfNeedsAffineTransform;//true if filePSF is raw/un-warped and must be affine-warped (linear part only) with this view's own Acell before use
 
 	int verbose;
 
@@ -40,6 +41,7 @@ struct paramDeconvolution
 	int blockZsize;
 
 	bool saveAsUINT16;
+	bool saveAsZarr;//false (default): write output as KLB, matching every prior dataset. true: write as Zarr v3.
 	float weightThr;
 
     imgTypeDeconvolution imgBackground;	
@@ -57,6 +59,7 @@ struct paramDeconvolution
 		blockZsize = -1;//compute deconvolution all at once
 		outputFilePrefix = std::string("");
 		saveAsUINT16 = true;
+		saveAsZarr = false;
 		weightThr = 0.0f;
 	}
 

@@ -18,9 +18,57 @@
 #include "cuda.h"
 #include "book.h"
 #include "imgUtils.h"
+#include "zarrIO.h"
+#include "n5IO.h"
 
 
 using namespace std;
+
+//converts a raw buffer of the given Zarr/N5 dtype string into imgType, matching the
+//int2float conversion already done for KLB in readROI
+template<class imgType>
+static void convertRawBufferToImgType(const void* raw, const string& dtype, size_t numElements, imgType* out)
+{
+	if (dtype == "uint8")
+	{
+		const uint8_t* p = (const uint8_t*)raw;
+		for (size_t ii = 0; ii < numElements; ii++) out[ii] = (imgType)p[ii];
+	}
+	else if (dtype == "uint16")
+	{
+		const uint16_t* p = (const uint16_t*)raw;
+		for (size_t ii = 0; ii < numElements; ii++) out[ii] = (imgType)p[ii];
+	}
+	else if (dtype == "uint32")
+	{
+		const uint32_t* p = (const uint32_t*)raw;
+		for (size_t ii = 0; ii < numElements; ii++) out[ii] = (imgType)p[ii];
+	}
+	else if (dtype == "float32")
+	{
+		const float* p = (const float*)raw;
+		for (size_t ii = 0; ii < numElements; ii++) out[ii] = (imgType)p[ii];
+	}
+	else if (dtype == "float64")
+	{
+		const double* p = (const double*)raw;
+		for (size_t ii = 0; ii < numElements; ii++) out[ii] = (imgType)p[ii];
+	}
+	else
+	{
+		cout << "ERROR: multiviewImage: unsupported source dtype '" << dtype << "' for conversion" << endl;
+		exit(4);
+	}
+}
+
+static size_t rawDtypeSize(const string& dtype)
+{
+	if (dtype == "uint8") return 1;
+	if (dtype == "uint16") return 2;
+	if (dtype == "uint32" || dtype == "float32") return 4;
+	if (dtype == "float64") return 8;
+	return 0;
+}
 
 
 template<class imgType>
@@ -462,6 +510,67 @@ void multiviewImage<imgType>::padArrayWithZeros(size_t pos, const std::uint32_t 
 template<class imgType>
 int multiviewImage<imgType>::readImage(const std::string& filename, int pos)
 {
+	if (zarr_isArray(filename) || n5_isArray(filename))
+	{
+		bool isZarr = zarr_isArray(filename);
+
+		int64_t dims[3];
+		string dtype;
+		vector<uint8_t> raw;
+
+		if (isZarr)
+		{
+			zarrArrayInfo info;
+			int err = zarr_readHeader(filename, info);
+			if (err > 0)
+				return err;
+			size_t ndims = info.shape.size();
+			dims[0] = info.shape[ndims - 1]; dims[1] = info.shape[ndims - 2]; dims[2] = info.shape[ndims - 3];
+			dtype = info.dtype;
+
+			raw.resize((size_t)dims[0] * dims[1] * dims[2] * rawDtypeSize(dtype), 0);
+			err = zarr_readArray(filename, raw.data(), raw.size(), info);
+			if (err > 0)
+				return err;
+		}
+		else
+		{
+			n5ArrayHeader header;
+			int err = n5_readHeader(filename, header);
+			if (err > 0)
+				return err;
+			dims[0] = header.dims[0]; dims[1] = header.dims[1]; dims[2] = header.dims[2];
+			dtype = header.dataType;
+
+			raw.resize((size_t)dims[0] * dims[1] * dims[2] * rawDtypeSize(dtype), 0);
+			err = n5_readArray(filename, raw.data(), raw.size(), header);
+			if (err > 0)
+				return err;
+		}
+
+		size_t numElements = (size_t)dims[0] * dims[1] * dims[2];
+		imgType* imgA = new imgType[numElements];
+		convertRawBufferToImgType<imgType>(raw.data(), dtype, numElements, imgA);
+
+		if (pos < 0)
+		{
+			imgVec_CPU.push_back(imgA);
+			imgVec_GPU.push_back(NULL);
+			dimsImgVec.push_back(dimsImg());
+			pos = (int)imgVec_GPU.size() - 1;
+		}
+		else
+		{
+			if (imgVec_CPU[pos] != NULL)
+				delete[] (imgVec_CPU[pos]);
+			imgVec_CPU[pos] = imgA;
+		}
+		for (int ii = 0; ii < 3; ii++)
+			dimsImgVec[pos].dims[ii] = dims[ii];
+		dimsImgVec[pos].ndims = 3;
+
+		return 0;
+	}
 
 	klb_imageIO imgFull(filename);
 	int err = 0;
@@ -479,6 +588,25 @@ int multiviewImage<imgType>::readImage(const std::string& filename, int pos)
 template<class imgType>
 int multiviewImage<imgType>::readImageSizeFromHeader(const std::string& filename, int64_t dimsOut[MAX_DATA_DIMS])
 {
+	if (zarr_isArray(filename))
+	{
+		zarrArrayInfo info;
+		int err = zarr_readHeader(filename, info);
+		if (err > 0)
+			return err;
+		size_t ndims = info.shape.size();
+		dimsOut[0] = info.shape[ndims - 1]; dimsOut[1] = info.shape[ndims - 2]; dimsOut[2] = info.shape[ndims - 3];
+		return 0;
+	}
+	if (n5_isArray(filename))
+	{
+		n5ArrayHeader header;
+		int err = n5_readHeader(filename, header);
+		if (err > 0)
+			return err;
+		dimsOut[0] = header.dims[0]; dimsOut[1] = header.dims[1]; dimsOut[2] = header.dims[2];
+		return 0;
+	}
 
 	klb_imageIO imgFull(filename);
 	int err = 0;

@@ -13,8 +13,9 @@
 #include <iostream>
 #include <string>
 #include <chrono>
-#include <math.h>  
+#include <math.h>
 #include <algorithm>
+#include <cstring>
 #include "multiGPUblockController.h"
 
 
@@ -54,6 +55,24 @@ int main(int argc, const char** argv)
 
 		cout << "Reading PSF for view " << ii << endl;
 		master.full_psf_mem.readImage(master.paramDec.filePSF[ii], -1);
+
+		if (master.paramDec.psfNeedsAffineTransform[ii])
+		{
+			//raw/un-warped PSF (extracted at native camera orientation): orient it with this
+			//view's own registration, using only the linear (rotation/scale/shear) part --
+			//translation would shift the small kernel off-center into empty space.
+			float Alinear[AFFINE_3D_MATRIX_SIZE];
+			memcpy(Alinear, &(master.paramDec.Acell[ii][0]), sizeof(float) * AFFINE_3D_MATRIX_SIZE);
+			Alinear[3] = 0.0f; Alinear[7] = 0.0f; Alinear[11] = 0.0f;
+
+			int64_t* psfDimsIn = master.full_psf_mem.dimsImgVec[ii].dims;
+			double diag = sqrt((double)psfDimsIn[0] * psfDimsIn[0] + (double)psfDimsIn[1] * psfDimsIn[1] + (double)psfDimsIn[2] * psfDimsIn[2]);
+			int64_t boxSize = 2 * (int64_t)ceil(diag / 2.0) + 1;//odd, >= diag so the rotated kernel is never clipped
+			int64_t psfDimsOut[3] = { boxSize, boxSize, boxSize };
+
+			cout << "Applying linear part of affine transformation to PSF for view " << ii << endl;
+			master.full_psf_mem.apply_affine_transformation_img(ii, psfDimsOut, Alinear, 3);
+		}
 
 		t2 = Clock::now();
 		std::cout << "Took " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms" << std::endl;
@@ -141,9 +160,12 @@ int main(int argc, const char** argv)
 	cout << "Writing result to "<<string(fileoutName) << endl;
 	
 	if ( master.paramDec.saveAsUINT16 )
-		err = master.writeDeconvoutionResult_uint16(string(fileoutName) + ".klb");	
+	{
+		string outExt = master.paramDec.saveAsZarr ? ".zarr" : ".klb";
+		err = master.writeDeconvoutionResult_uint16(string(fileoutName) + outExt);
+	}
 	else
-		err = master.writeDeconvoutionResultRaw(string(fileoutName) + ".raw");
+		err = master.writeDeconvoutionResultRaw(string(fileoutName) + ".raw");//raw dump, no Zarr support (saveAsZarr requires saveAsUINT16)
 	
 	
 	if (err > 0)
