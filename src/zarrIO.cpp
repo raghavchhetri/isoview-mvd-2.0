@@ -549,7 +549,7 @@ int zarr_writeArray3D(const string& path, const void* data, const int64_t dims[3
 	//blosc2 Python package decode correctly, but that numcodecs' blosc decoder
 	//(what the mainstream zarr-python package uses) fails on -- a known ecosystem
 	//gap, not a correctness issue. Raw bytes sidestep that entirely for universal
-	//readability, at the cost of larger files (see TODO.md for a compressed follow-up).
+	//readability, at the cost of larger files.
 	size_t chunkVoxels = (size_t)(chunkShape[0] * chunkShape[1] * chunkShape[2]);
 	vector<uint8_t> chunkBuf(chunkVoxels * itemSize);
 	const uint8_t* src = (const uint8_t*)data;

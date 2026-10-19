@@ -3,8 +3,8 @@
 * BigStitcher-exported datasets (psf.n5/psf_t0_vwNNN).
 *
 * Supports N5's default block layout (mode 0) with gzip or raw (uncompressed)
-* compression -- what BigStitcher's PSF export actually writes. See TODO.md for
-* other N5 compression codecs (bzip2/xz/blosc) if a future dataset needs them.
+* compression -- what BigStitcher's PSF export actually writes. Other N5
+* compression codecs (bzip2/xz/blosc) are not supported.
 */
 #ifndef __N5_IO_HEADER_H__
 #define __N5_IO_HEADER_H__

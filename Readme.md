@@ -6,18 +6,17 @@ released as Supplementary Software for the IsoView light-sheet paper
 
 > **2026 update.** This package has been modernized to build and run on current NVIDIA
 > hardware — verified on an **RTX A5000 (Ampere, sm_86) with CUDA 11.8**. The original
-> precompiled binaries only targeted pre-Pascal GPUs and no longer run. For the complete
-> build procedure, toolchain/toolset requirements, and the record of the port (arch
-> flags, MSVC toolset pin, and the in-place → out-of-place cuFFT fix), see
-> **`BUILD_2026.md`** in this folder. The notes below are the quick reference.
+> precompiled binaries only targeted pre-Pascal GPUs and no longer run. The port consisted
+> of new CUDA arch flags, a pinned MSVC toolset, and an in-place → out-of-place cuFFT fix
+> (without it the Lucy-Richardson loop diverges to NaN). Build instructions are in §2.
 >
 > **2026-09-16:** the pipeline can now also read **Zarr v3** views and **N5** PSFs
 > directly (e.g. a BigStitcher/SpimData2 export) and write **Zarr v3** output — see
-> §3 below and `CLAUDE.md` §10 for details.
+> §3 and §5 below for details.
 
 ## 1. Contents
 
-- **`src`** — all C++/CUDA source. Build with CMake (see `BUILD_2026.md`).
+- **`src`** — all C++/CUDA source. Build with CMake (see §2).
 - **`tools`** — `convert_spimdata_xml.py`: converts a BigStitcher/SpimData2 XML export
   (Zarr v3 views + N5 PSFs) into this project's native `<document>` XML, one file per
   tile. See §3 below.
@@ -26,7 +25,6 @@ released as Supplementary Software for the IsoView light-sheet paper
   (`imReg_1..4.klb`) with matching PSFs (`psfReg_1..4.klb`), plus the example
   configuration `config_2026.xml`.
 - **`CMakeLists.txt`** — top-level CMake project file.
-- **`BUILD_2026.md`** — modern build/run guide and porting notes.
 
 The compiled executables are produced under **`build/src/Release/`** when you build.
 
@@ -42,8 +40,23 @@ GPUs). You need:
 - The **KLB** image-format library is bundled under `src/external/klb`
   (https://bitbucket.org/fernandoamat/keller-lab-block-filetype).
 
-Do **not** build against CUDA 7.0 (a known cuFFT bug can produce NaNs). The exact
-configure/build commands and troubleshooting live in `BUILD_2026.md`.
+Do **not** build against CUDA 7.0 (a known cuFFT bug can produce NaNs).
+
+Configure in a **fresh** build directory (the CUDA arch flags are CMake cache variables;
+`sm_86` is set in the three `CMakeLists.txt` files — add `-gencode` lines for other GPUs):
+
+```powershell
+mkdir build; cd build
+cmake -G "Visual Studio 17 2022" -A x64 -T version=14.38 -DCUDA_TOOLKIT_ROOT_DIR="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8" ..
+cmake --build . --config Release
+```
+
+`-T version=14.38` pins the MSVC v14.38 toolset (newer toolsets are rejected by CUDA
+11.8's nvcc). The executables need `cudart64_110.dll` and `cufft64_10.dll` (from the CUDA
+11.8 `bin` folder) on `PATH`; `blosc.dll` is copied next to them automatically. On CMake
+4.x add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`. The root `CMakeLists.txt` deliberately keeps
+`cmake_minimum_required(VERSION 3.5)`: a higher minimum removes the legacy `FindCUDA`
+module this build relies on.
 
 ## 3. XML configuration file
 
@@ -79,14 +92,14 @@ algorithm parameters.
   `saveAsUINT16="1"`). See §5.
 - `anisotropyZ` — optional; overrides the affine-derived Z-anisotropy estimate. Needed
   when `A` is a real composed registration matrix rather than the identity-except-Z
-  pattern the default heuristic recognizes (see `CLAUDE.md` §5/§10).
+  pattern the default heuristic recognizes.
 
 ## 4. Running the test
 
 Input stacks must be in **KLB** format, which allows efficient random access to regions
 of interest.
 
-1. Build the project (see `BUILD_2026.md`).
+1. Build the project (see §2).
 2. Open a terminal in the build output folder, e.g.
    `D:\2026_multiview-deconvolution\2026_IsoView-MVD-Software\build\src\Release`.
 3. Run:
@@ -114,9 +127,9 @@ writes one native XML per tile (`--all-tiles` to convert every tile at once) wit
 `psfNeedsAffineTransform="1"` set — the PSFs from a fresh BigStitcher export are raw and
 not yet warped to each view. Then run the resulting XML exactly as in §4. Add
 `--num-iter`, `--background`, `--lambda-tv` to override the defaults it fills in (the
-default is `numIter=1`, meant for a first correctness check before a full run). See
-`CLAUDE.md` §10 for the on-disk format details and current limitations (only the
-whole-volume executable has the PSF-warp step; no ROI/partial reads yet).
+default is `numIter=1`, meant for a first correctness check before a full run). Current
+limitations: only the whole-volume executable has the PSF-warp step, and there are no
+ROI/partial reads yet.
 
 ## 6. License
 

@@ -8,3 +8,8 @@ test/dsB_zarr_test.xml
 test/tile00_deconv.xml
 test/config_2026_local.xml
 test/run_tile00.log
+
+# private working notes, kept locally only
+CLAUDE.md
+TODO.md
+BUILD_2026.md

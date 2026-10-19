@@ -7,7 +7,7 @@
 * single-chunk [bytes, blosc] array plus a minimal OME-Zarr group wrapper.
 *
 * Not a general-purpose Zarr v3 implementation: no partial/ROI reads, no other codecs
-* (gzip/zstd-direct/transpose/...), no multi-chunk writes. See TODO.md for follow-ups.
+* (gzip/zstd-direct/transpose/...), no multi-chunk writes.
 */
 #ifndef __ZARR_IO_HEADER_H__
 #define __ZARR_IO_HEADER_H__

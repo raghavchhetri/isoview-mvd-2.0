@@ -123,7 +123,7 @@ include_directories("${PROJECT_SOURCE_DIR}/external/c-blosc/blosc")
 add_subdirectory("${PROJECT_SOURCE_DIR}/external/c-blosc" "${CMAKE_CURRENT_BINARY_DIR}/c-blosc")
 
 #blosc.dll needs to sit next to the executables (or be on PATH) to load at runtime,
-#the same way cudart64_110.dll/cufft64_10.dll already do -- see BUILD_2026.md
+#the same way cudart64_110.dll/cufft64_10.dll already do
 add_custom_command(TARGET blosc_shared POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:blosc_shared> "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>")
 
@@ -180,7 +180,7 @@ ADD_EXECUTABLE(tool_compare_images tool_compare_images.cxx)
 TARGET_LINK_LIBRARIES(tool_compare_images multiview_deconvolution_GPU)
 
 #blosc.dll needs to sit next to each executable to load at runtime, the same way
-#cudart64_110.dll/cufft64_10.dll already do (see BUILD_2026.md). A POST_BUILD command
+#cudart64_110.dll/cufft64_10.dll already do. A POST_BUILD command
 #attached to blosc_shared itself doesn't reliably fire under the Visual Studio
 #generator when the target lives in a different directory scope (verified: the
 #generated blosc_shared.vcxproj never gained the PostBuildEvent), so each executable
