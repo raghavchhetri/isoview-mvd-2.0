@@ -58,6 +58,20 @@ cmake --build . --config Release
 `cmake_minimum_required(VERSION 3.5)`: a higher minimum removes the legacy `FindCUDA`
 module this build relies on.
 
+**Linux (untested).** The 2026 changes have only been built and run on Windows. On Linux
+the equivalent should be (GCC 11 or older is required by CUDA 11.8):
+
+```
+mkdir build && cd build
+cmake -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.8 ..
+cmake --build . -j
+```
+
+The executables (no `.exe` suffix) are produced in `build/src/`. The default arch flags
+target `sm_86`; for another GPU override them at configure time, e.g. for a T4 (`sm_75`)
+add `-DCUDA_NVCC_FLAGS="-gencode arch=compute_75,code=sm_75"`. Build problems and fixes
+are welcome as issues or pull requests.
+
 ## 3. XML configuration file
 
 Parameters and file names are passed via an XML file; see the example

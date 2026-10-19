@@ -11,11 +11,33 @@
 #include <vector>
 #include <algorithm>
 
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
+
 using json = nlohmann::json;
 using namespace std;
 
 namespace
 {
+	//creates the directory and any missing parents (like "mkdir -p"); existing directories are not an error
+	void makeDir(const string& path)
+	{
+		for (size_t i = 1; i <= path.size(); i++)
+		{
+			if (i != path.size() && path[i] != '/' && path[i] != '\\')
+				continue;
+			string prefix = path.substr(0, i);
+#ifdef _WIN32
+			_mkdir(prefix.c_str());
+#else
+			mkdir(prefix.c_str(), 0777);
+#endif
+		}
+	}
+
 	bool fileExists(const string& path)
 	{
 		ifstream f(path, ios::binary);
@@ -234,8 +256,7 @@ namespace
 		size_t itemSize = 2;
 		size_t planeVoxels = (size_t)nx * ny;
 
-		system(("mkdir \"" + levelPath + "\" 2>nul").c_str());
-		system(("mkdir \"" + levelPath + "/c\" 2>nul").c_str());
+		makeDir(levelPath + "/c");
 
 		blosc_set_compressor("zstd");
 		vector<uint8_t> compBuf(planeVoxels * itemSize + BLOSC_MAX_OVERHEAD);
@@ -274,7 +295,7 @@ namespace
 			uint8_t crcBuf[4] = { (uint8_t)(crc & 0xFF), (uint8_t)((crc >> 8) & 0xFF), (uint8_t)((crc >> 16) & 0xFF), (uint8_t)((crc >> 24) & 0xFF) };
 			shardBytes.insert(shardBytes.end(), crcBuf, crcBuf + 4);
 
-			system(("mkdir \"" + levelPath + "/c/" + to_string(cz) + "/0\" 2>nul").c_str());
+			makeDir(levelPath + "/c/" + to_string(cz) + "/0");
 			string chunkPath = levelPath + "/c/" + to_string(cz) + "/0/0";
 			ofstream chunkFile(chunkPath, ios::binary);
 			if (!chunkFile.is_open())
@@ -541,8 +562,7 @@ int zarr_writeArray3D(const string& path, const void* data, const int64_t dims[3
 		numChunks[d] = (arrayShape[d] + chunkShape[d] - 1) / chunkShape[d];
 	}
 
-	system(("mkdir \"" + path + "\" 2>nul").c_str());
-	system(("mkdir \"" + path + "/c\" 2>nul").c_str());
+	makeDir(path + "/c");
 
 	//written with the plain "bytes" codec (no blosc): c-blosc2 produces modern
 	//blosc2-frame-format chunks that this project's own reader and the official
@@ -556,10 +576,10 @@ int zarr_writeArray3D(const string& path, const void* data, const int64_t dims[3
 
 	for (int64_t cz = 0; cz < numChunks[0]; cz++)
 	{
-		system(("mkdir \"" + path + "/c/" + to_string(cz) + "\" 2>nul").c_str());
+		makeDir(path + "/c/" + to_string(cz));
 		for (int64_t cy = 0; cy < numChunks[1]; cy++)
 		{
-			system(("mkdir \"" + path + "/c/" + to_string(cz) + "/" + to_string(cy) + "\" 2>nul").c_str());
+			makeDir(path + "/c/" + to_string(cz) + "/" + to_string(cy));
 			for (int64_t cx = 0; cx < numChunks[2]; cx++)
 			{
 				int64_t chunkStart[3] = { cz * chunkShape[0], cy * chunkShape[1], cx * chunkShape[2] };
@@ -619,7 +639,7 @@ int zarr_writeArray3D(const string& path, const void* data, const int64_t dims[3
 
 int zarr_writePyramid3D(const string& groupPath, const uint16_t* data, const int64_t dims[3])
 {
-	system(("mkdir \"" + groupPath + "\" 2>nul").c_str());
+	makeDir(groupPath);
 
 	vector<int64_t> levelScaleFactors;//2^level, isotropic downsampling at every level
 	int64_t curDims[3] = { dims[0], dims[1], dims[2] };
