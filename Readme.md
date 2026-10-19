@@ -117,3 +117,9 @@ not yet warped to each view. Then run the resulting XML exactly as in §4. Add
 default is `numIter=1`, meant for a first correctness check before a full run). See
 `CLAUDE.md` §10 for the on-disk format details and current limitations (only the
 whole-volume executable has the PSF-warp step; no ROI/partial reads yet).
+
+## 6. License
+
+Released under the Janelia Open-Source Software License (3-clause BSD) — see
+`LICENSE.txt`; bundled third-party components and their licenses are listed in
+`THIRD_PARTY_NOTICES.md`.
